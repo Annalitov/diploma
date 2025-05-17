@@ -1,0 +1,140 @@
+-- 1. Таблица форматов учета (например, Профсоюз, Посещаемость)
+CREATE TABLE formats (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL UNIQUE, -- Название формата (например, "Профсоюз")
+    description TEXT -- Описание формата
+);
+
+-- 2. Таблица подразделений ППО (первичные профсоюзные организации)
+CREATE TABLE ppo_units (
+    id SERIAL PRIMARY KEY,
+    format_id INT REFERENCES formats(id) ON DELETE CASCADE, -- Связь с форматом учета
+    name VARCHAR(255) NOT NULL UNIQUE -- Название подразделения ППО
+);
+
+-- 3. Таблица групп, относящихся к подразделениям ППО
+CREATE TABLE groups (
+    id SERIAL PRIMARY KEY,
+    ppo_id INT REFERENCES ppo_units(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL UNIQUE -- Название группы
+);
+
+-- 4. Таблица членов профсоюза
+CREATE TABLE union_members (
+    id SERIAL PRIMARY KEY,
+    group_id INT REFERENCES groups(id) ON DELETE CASCADE,
+    full_name VARCHAR(255) NOT NULL, -- ФИО полностью
+    birth_date DATE NOT NULL, -- Дата рождения (чч.мм.гг)
+    gender CHAR(1) CHECK (gender IN ('м', 'ж')), -- Пол (м/ж)
+    phone VARCHAR(20), -- Мобильный телефон
+    email VARCHAR(255) UNIQUE, -- Email
+    funding_type VARCHAR(50) CHECK (funding_type IN ('Бюджет', 'Платное')), -- Бюджет/платное
+    created_at TIMESTAMP DEFAULT NOW() -- Дата добавления записи
+);
+
+-- 5. Таблица периодов уплаты взносов
+CREATE TABLE payment_periods (
+    id SERIAL PRIMARY KEY,
+    format_id INT REFERENCES formats(id) ON DELETE CASCADE, -- Связь с форматом учета
+    period_name VARCHAR(20) NOT NULL UNIQUE -- Например, "02.-23-07.23"
+);
+
+-- 6. Таблица отметок об уплате взносов
+CREATE TABLE union_payments (
+    id SERIAL PRIMARY KEY,
+    member_id INT REFERENCES union_members(id) ON DELETE CASCADE,
+    period_id INT REFERENCES payment_periods(id) ON DELETE CASCADE,
+    paid VARCHAR(2) CHECK (paid IN ('-', '1', '0')), -- 1 заплатил, 0 неплатил, - не платит в этот период
+    paid_at TIMESTAMP DEFAULT NULL -- Дата внесения платежа (NULL, если не оплачен)
+);
+
+
+
+----------- формат посещаемости --------------
+
+
+-- ─── 1. Подразделения института (первый уровень, привязка к formats) ───
+CREATE TABLE IF NOT EXISTS attendance_units (
+    id        SERIAL PRIMARY KEY,
+    format_id INTEGER NOT NULL REFERENCES formats(id) ON DELETE CASCADE,
+    name      TEXT    NOT NULL UNIQUE          -- «Институт радиоэлектроники» …
+);
+
+-- ─── 2. Группы (полное название в одном поле) ───
+CREATE TABLE IF NOT EXISTS attendance_groups (
+    id       SERIAL PRIMARY KEY,
+    unit_id  INTEGER NOT NULL REFERENCES attendance_units(id) ON DELETE CASCADE,
+    name     TEXT    NOT NULL UNIQUE           -- «М8О‑101БВ‑24»
+);
+
+-- ─── 3. Семестры ───
+CREATE TABLE IF NOT EXISTS attendance_semesters (
+    id        SERIAL PRIMARY KEY,
+    group_id  INTEGER NOT NULL REFERENCES attendance_groups(id) ON DELETE CASCADE,
+    name      TEXT    NOT NULL,                -- «Осень 2024»
+    start_date DATE,
+    end_date   DATE
+);
+
+-- ─── 4. Студенты ───
+CREATE TABLE IF NOT EXISTS attendance_students (
+    id          SERIAL PRIMARY KEY,
+    semester_id INTEGER NOT NULL REFERENCES attendance_semesters(id) ON DELETE CASCADE,
+    full_name   TEXT    NOT NULL,
+    student_number TEXT,
+    email       TEXT,
+    gender      CHAR(1),
+    birth_date  DATE
+);
+
+-- ─── 5. Предметы ───
+CREATE TABLE IF NOT EXISTS subjects (
+    id          SERIAL PRIMARY KEY,
+    semester_id INTEGER NOT NULL REFERENCES attendance_semesters(id) ON DELETE CASCADE,
+    name        TEXT    NOT NULL               -- «Высшая математика»
+);
+
+-- ─── 6. Даты занятий ───
+CREATE TABLE IF NOT EXISTS lessons (
+    id         SERIAL PRIMARY KEY,
+    subject_id INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+    lesson_date DATE   NOT NULL
+);
+
+-- ─── 7. Посещаемость ───
+CREATE TABLE IF NOT EXISTS attendances (
+    id         SERIAL PRIMARY KEY,
+    lesson_id  INTEGER NOT NULL REFERENCES lessons(id) ON DELETE CASCADE,
+    student_id INTEGER NOT NULL REFERENCES attendance_students(id) ON DELETE CASCADE,
+    status     TEXT NOT NULL
+                DEFAULT 'н'
+                CHECK (status IN ('+', 'н', 'б'))   -- был / не был / болел
+);
+
+-- ─── 8. Оценки ───
+CREATE TABLE IF NOT EXISTS subject_grades (
+    id         SERIAL PRIMARY KEY,
+    subject_id INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+    student_id INTEGER NOT NULL REFERENCES attendance_students(id) ON DELETE CASCADE,
+    control_1  TEXT CHECK (control_1 IN ('0','1','2','3','4','5','Ня','Нд')),
+    control_2  TEXT CHECK (control_2 IN ('0','1','2','3','4','5','Ня','Нд')),
+    exam       TEXT CHECK (exam      IN ('0','1','2','3','4','5','Ня','Нд', 'Зч')),
+    retake     TEXT CHECK (retake    IN ('0','1','2','3','4','5','Ня','Нд', 'Зч')),
+    UNIQUE (subject_id, student_id)
+);
+
+
+CREATE TABLE IF NOT EXISTS attendance_admins (
+    id            SERIAL  PRIMARY KEY,
+    name          TEXT    NOT NULL,
+    email         TEXT    UNIQUE NOT NULL,
+    password_hash TEXT    NOT NULL,
+
+    -- Подразделение института, к которому привязан администратор
+    unit_id       INTEGER NOT NULL
+                 REFERENCES attendance_units(id)
+                 ON DELETE CASCADE,
+
+    -- Права доступа: viewer | editor | admin
+    role          TEXT    NOT NULL DEFAULT 'admin'
+);

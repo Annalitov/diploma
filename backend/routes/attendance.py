@@ -3,6 +3,12 @@ from sqlalchemy import func, select, update, delete, insert, cast, Integer, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 import io, csv
+import re
+import pandas as pd
+from itertools import groupby
+from urllib.parse import quote
+import itertools
+from fastapi.responses import StreamingResponse
 from backend.database import get_db
 from backend.deps import get_current_attendance_admin
 from backend.models import (
@@ -641,44 +647,53 @@ async def grades_summary(
 
 # ─────────── ФОРМИРОВАНИЕ СПИСКА ДОЛЖНИКОВ ───────────
 
-@router.get("/analytics/debtors-export", summary="Экспорт списка должников")
+@router.get("/analytics/debtors-export", summary="Экспорт списка должников (вертикальный формат)")
 async def export_debtors(
-    sem_id:      int              = Query(..., description="ID семестра"),
-    subject_id:  int              = Query(..., description="ID предмета"),
-    grade_field: str             = Query(
-        ..., regex="^(control_1|control_2|exam|retake|commission)$",
+    sem_id: int = Query(..., description="ID семестра"),
+    subject_id: int = Query(..., description="ID предмета"),
+    grade_field: str = Query(
+        ..., 
+        regex="^(control_1|control_2|exam|retake|commission)$",
         description="Поле оценки"
     ),
-    group_ids:   list[int] | None = Query(
-        None, alias="group_ids[]",
-        description="Список ID групп"
-    ),
-    course:      int | None       = Query(None, ge=1, le=4, description="Курс"),
-    db:          AsyncSession     = Depends(get_db),
+    group_ids: list[int] | None = Query(None, alias="group_ids[]"),
+    course: int | None = Query(None, ge=1, le=4),
+    db: AsyncSession = Depends(get_db),
 ):
+    grade_labels = {
+        "control_1": "К1",
+        "control_2": "К2",
+        "exam": "Э",
+        "retake": "П",
+        "commission": "К"
+    }
+    control_label = grade_labels[grade_field]
+
     stmt = (
-        select(AttendanceStudent.id, AttendanceStudent.full_name)
-        .join(AttendanceSemester,
-              AttendanceStudent.semester_id == AttendanceSemester.id)
-        .join(AttendanceGroup,
-              AttendanceSemester.group_id == AttendanceGroup.id)
+        select(
+            AttendanceStudent.id,
+            AttendanceStudent.full_name,
+            AttendanceGroup.name.label("group_name")
+        )
+        .join(AttendanceSemester, AttendanceStudent.semester_id == AttendanceSemester.id)
+        .join(AttendanceGroup, AttendanceSemester.group_id == AttendanceGroup.id)
         .where(AttendanceSemester.id == sem_id)
     )
-    if group_ids is not None:
+    if group_ids:
         stmt = stmt.where(AttendanceGroup.id.in_(group_ids))
-    elif course is not None:
+    elif course:
         stmt = stmt.where(
             func.substr(func.split_part(AttendanceGroup.name, "-", 2), 1, 1)
             == str(course)
         )
     else:
         raise HTTPException(400, "Нужно указать либо group_ids, либо course")
-    rows = (await db.execute(stmt)).all()
-    if not rows:
-        # пустой Excel
-        df_empty = pd.DataFrame(columns=["Группа", "ФИО", "Семестр", "Дисциплина", "Форма", "Оценка"])
+
+    student_rows = (await db.execute(stmt)).all()
+    if not student_rows:
+        df = pd.DataFrame(columns=["учебная группа", "студент", "дисциплина", "семестр", "вид контроля"])
         buf = io.BytesIO()
-        df_empty.to_excel(buf, index=False)
+        df.to_excel(buf, index=False)
         buf.seek(0)
         return StreamingResponse(
             buf,
@@ -686,8 +701,8 @@ async def export_debtors(
             headers={"Content-Disposition": "attachment; filename=debtors.xlsx"},
         )
 
-    student_ids = [r[0] for r in rows]
-    student_names = {r[0]: r[1] for r in rows}
+    student_map = {row[0]: {"name": row[1], "group": row[2]} for row in student_rows}
+    student_ids = list(student_map.keys())
 
     SG = SubjectGrade
     field_col = getattr(SG, grade_field)
@@ -699,38 +714,393 @@ async def export_debtors(
 
     q = (
         select(
-            AttendanceGroup.name.label("Группа"),
-            AttendanceStudent.full_name.label("ФИО"),
-            AttendanceSemester.name.label("Семестр"),
-            func.literal_column(f"'{grade_field}'").label("Форма"),
-            field_col.label("Оценка"),
+            SG.student_id,
+            Subject.name.label("subject_name"),
+            AttendanceSemester.name.label("semester_name")
         )
-        .select_from(SG)
         .join(AttendanceStudent, SG.student_id == AttendanceStudent.id)
         .join(AttendanceSemester, AttendanceStudent.semester_id == AttendanceSemester.id)
-        .join(AttendanceGroup, AttendanceSemester.group_id == AttendanceGroup.id)
+        .join(Subject, SG.subject_id == Subject.id)
         .where(
             SG.subject_id == subject_id,
             AttendanceStudent.id.in_(student_ids),
             fail_cond
         )
-        .order_by(AttendanceGroup.name, AttendanceStudent.full_name)
     )
 
     result = await db.execute(q)
-    data = result.all()
+    failures = result.fetchall()
 
-    df = pd.DataFrame(data, columns=["Группа", "ФИО", "Семестр", "Форма", "Оценка"])
-    df["Семестр №"] = df["Семестр"].str.extract(r"(\d+)$")
+    from collections import defaultdict
+    student_failures = defaultdict(list)
+    for student_id, subj, sem in failures:
+        sem_number = "".join(filter(str.isdigit, sem))
+        student_failures[student_id].append((subj, sem_number, control_label))
 
+    rows = []
+    for student_id in sorted(student_failures, key=lambda sid: (student_map[sid]["group"], student_map[sid]["name"])):
+        group = student_map[student_id]["group"]
+        name = student_map[student_id]["name"]
+        rows.append([group])
+        rows.append([name])
+        for subj, sem_num, control in student_failures[student_id]:
+            rows.append([subj, sem_num, control])
+        rows.append([])
+
+    df = pd.DataFrame(rows, columns=["учебная группа", "семестр", "вид контроля"])
     buf = io.BytesIO()
-    df.to_excel(buf, index=False)
+    df.to_excel(buf, index=False, header=False)
     buf.seek(0)
 
     return StreamingResponse(
         buf,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": "attachment; filename=debtors.xlsx"},
+    )
+
+
+@router.get("/analytics/debtors-all-groups-by-stage",summary="Экспорт списка должников по всем группам и этапу")
+async def export_debtors_all_groups_by_stage(
+    stage: str = Query(
+        ..., 
+        regex="^(exam|retake|commission)$", 
+        description="Этап: exam, retake или commission"
+    ),
+    db: AsyncSession = Depends(get_db),
+):
+    groups = (await db.execute(
+        select(AttendanceGroup.id, AttendanceGroup.name)
+    )).all()
+    if not groups:
+        raise HTTPException(404, "Нет ни одной группы в системе")
+
+    passed = {"3", "4", "5"}
+    def sem_no(name: str) -> str:
+        m = re.search(r"(\d+)$", name)
+        return m.group(1) if m else ""
+    def is_debtor_by_stage(exam, retake, commission, stage: str) -> bool:
+        exam, retake, commission = map(str, (exam, retake, commission))
+        if stage == "exam":
+            return exam not in passed
+        if stage == "retake":
+            return exam not in passed or retake not in passed
+        return exam not in passed or retake not in passed or commission not in passed
+    label_map = {"exam": "Э", "retake": "П", "commission": "Км"}
+    stage_rus = {"exam": "экзамен", "retake": "пересдача", "commission": "комиссия"}[stage]
+
+    data: list[list[str]] = []
+    data.append(["Учебная группа", "", ""])
+    data.append(["Студент",            "", ""])
+    data.append(["Дисциплина", "Семестр", "Вид контроля"])
+
+    first_group = True
+    for group_id, group_name in groups:
+        SG = SubjectGrade
+        q = (
+            select(
+                AttendanceStudent.id.label("student_id"),
+                AttendanceStudent.full_name.label("student_name"),
+                AttendanceSemester.name.label("semester_name"),
+                Subject.name.label("subject_name"),
+                SG.exam, SG.retake, SG.commission
+            )
+            .select_from(SG)
+            .join(AttendanceStudent, SG.student_id == AttendanceStudent.id)
+            .join(AttendanceSemester, AttendanceStudent.semester_id == AttendanceSemester.id)
+            .join(Subject, SG.subject_id == Subject.id)
+            .where(AttendanceSemester.group_id == group_id)
+            .order_by(AttendanceStudent.full_name, Subject.name)
+        )
+        rows = (await db.execute(q)).all()
+
+        group_has_any = False
+        for student_id, grp_iter in groupby(rows, key=lambda r: r.student_id):
+            lst = list(grp_iter)
+            debts = [
+                r for r in lst
+                if is_debtor_by_stage(r.exam, r.retake, r.commission, stage)
+            ]
+            if not debts:
+                continue
+            if not group_has_any:
+                if not first_group:
+                    data.append([])
+                data.append([group_name, "", ""])
+                first_group = False
+                group_has_any = True
+
+            student_name = debts[0].student_name
+            data.append([student_name, "", ""])
+
+            for _sid, _sname, sem_name, subj_name, exam, retake, commission in debts:
+                ctrl = label_map[stage]
+                data.append([subj_name, sem_no(sem_name), ctrl])
+
+    if len(data) <= 3:
+        buf = io.BytesIO()
+        pd.DataFrame().to_excel(buf, index=False, header=False)
+        buf.seek(0)
+    else:
+        df = pd.DataFrame(data)
+        buf = io.BytesIO()
+        df.to_excel(buf, index=False, header=False)
+        buf.seek(0)
+
+    filename = f"Должники все группы — {stage_rus}.xlsx"
+    quoted = quote(filename)
+
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quoted}"
+        },
+    )
+
+@router.get("/analytics/debtors-by-group_stage",summary="Экспорт списка должников по одной группе и этапу")
+async def export_debtors_by_group_stage(
+    group_id: int = Query(..., description="ID учебной группы"),
+    stage:    str = Query("exam", regex="^(exam|retake|commission)$"),
+    db: AsyncSession = Depends(get_db),
+):
+    grp = (await db.execute(
+        select(AttendanceGroup).where(AttendanceGroup.id == group_id)
+    )).scalar_one_or_none()
+    if not grp:
+        raise HTTPException(404, "Группа не найдена")
+    group_name = grp.name
+
+    SG = SubjectGrade
+    q = (
+        select(
+            AttendanceStudent.id.label("student_id"),
+            AttendanceStudent.full_name.label("student_name"),
+            AttendanceSemester.name.label("semester_name"),
+            Subject.name.label("subject_name"),
+            SG.exam,
+            SG.retake,
+            SG.commission,
+        )
+        .select_from(SG)
+        .join(AttendanceStudent, SG.student_id == AttendanceStudent.id)
+        .join(AttendanceSemester, AttendanceStudent.semester_id == AttendanceSemester.id)
+        .join(Subject, SG.subject_id == Subject.id)
+        .where(AttendanceSemester.group_id == group_id)
+        .order_by(AttendanceStudent.full_name, Subject.name)
+    )
+    rows = (await db.execute(q)).all()
+
+    if not rows:
+        buf = io.BytesIO()
+        pd.DataFrame().to_excel(buf, index=False, header=False)
+        buf.seek(0)
+        filename = f"Должники группа {group_name}.xlsx"
+        quoted = quote(filename)
+        return StreamingResponse(
+            buf,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": f"attachment; filename*=UTF-8''{quoted}"
+            },
+        )
+
+    passed = {"3", "4", "5"}
+
+    def sem_no(name: str) -> str:
+        m = re.search(r"(\d+)$", name)
+        return m.group(1) if m else ""
+
+    def is_debtor_by_stage(exam, retake, commission, stage: str) -> bool:
+        passed = {"3","4","5"}
+        if stage == "exam":
+            return str(exam) not in passed
+        elif stage == "retake":
+            if str(exam) in passed:
+                return False
+            return str(retake) not in passed
+        elif stage == "commission":
+            if str(exam) in passed:
+                return False
+            if str(retake) in passed:
+                return False
+            return str(commission) not in passed
+        else:
+            return True
+
+
+    label_map = {
+        "exam": "Э",
+        "retake": "П",
+        "commission": "Км",
+    }
+
+    data: list[list[str]] = []
+
+    data.append(["Учебная группа", "", ""])
+    data.append(["Студент",           "", ""])
+    data.append(["Дисциплина", "Семестр", "Вид контроля"])
+    data.append([group_name, "", ""])
+
+    for student_id, group_iter in groupby(rows, key=lambda r: r.student_id):
+        lst = list(group_iter)
+        debts = [
+            r
+            for r in lst
+            if is_debtor_by_stage(r.exam, r.retake, r.commission, stage)
+        ]
+        if not debts:
+            continue
+
+        student_name = debts[0].student_name
+        data.append([student_name, "", ""])
+
+        for _sid, _sname, sem_name, subj_name, exam, retake, commission in debts:
+            if str(exam) not in passed:
+                ctrl = "Э"
+            elif str(retake) not in passed:
+                ctrl = "П"
+            else:
+                ctrl = "Км"
+            data.append([subj_name, sem_no(sem_name), ctrl])
+
+        data.append(["", "", ""])
+
+    df = pd.DataFrame(data)
+    buf = io.BytesIO()
+    df.to_excel(buf, index=False, header=False)
+    buf.seek(0)
+
+    stage_map = {
+        "exam":      "экзамен",
+        "retake":    "пересдача",
+        "commission":"комиссия",
+    }
+    stage_name = stage_map.get(stage, stage)
+
+    filename = f"Должники группа {group_name} — {stage_name}.xlsx"
+    quoted = quote(filename)
+
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quoted}"
+        },
+    )
+
+
+@router.get("/analytics/debtors-by-group",summary="Экспорт списка должников по одной группе")
+async def export_debtors_by_group(
+    group_id: int = Query(..., description="ID учебной группы"),
+    db: AsyncSession = Depends(get_db),
+):
+    grp = (await db.execute(
+        select(AttendanceGroup).where(AttendanceGroup.id == group_id)
+    )).scalar_one_or_none()
+    if not grp:
+        raise HTTPException(404, "Группа не найдена")
+    group_name = grp.name
+
+    SG = SubjectGrade
+    q = (
+        select(
+            AttendanceStudent.id.label("student_id"),
+            AttendanceStudent.full_name.label("student_name"),
+            AttendanceSemester.name.label("semester_name"),
+            Subject.name.label("subject_name"),
+            SG.exam,
+            SG.retake,
+            SG.commission,
+        )
+        .select_from(SG)
+        .join(AttendanceStudent, SG.student_id == AttendanceStudent.id)
+        .join(AttendanceSemester, AttendanceStudent.semester_id == AttendanceSemester.id)
+        .join(Subject, SG.subject_id == Subject.id)
+        .where(AttendanceSemester.group_id == group_id)
+        .order_by(AttendanceStudent.full_name, Subject.name)
+    )
+    rows = (await db.execute(q)).all()
+
+    if not rows:
+        buf = io.BytesIO()
+        pd.DataFrame().to_excel(buf, index=False, header=False)
+        buf.seek(0)
+        filename = f"Должники группа {group_name}.xlsx"
+        quoted = quote(filename)
+        return StreamingResponse(
+            buf,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": f"attachment; filename*=UTF-8''{quoted}"
+            },
+        )
+
+    passed = {"3", "4", "5"}
+
+    def sem_no(name: str) -> str:
+        m = re.search(r"(\d+)$", name)
+        return m.group(1) if m else ""
+
+    def is_debtor(exam, retake, commission) -> bool:
+        if str(exam) in passed:
+            return False
+        if str(retake) in passed:
+            return False
+        if str(commission) in passed:
+            return False
+        return True
+
+    label_map = {
+        "exam": "Э",
+        "retake": "П",
+        "commission": "Км",
+    }
+
+    data: list[list[str]] = []
+
+    data.append(["Учебная группа", "", ""])
+    data.append(["Студент",           "", ""])
+    data.append(["Дисциплина", "Семестр", "Вид контроля"])
+    data.append([group_name, "", ""])
+
+    for student_id, group_iter in groupby(rows, key=lambda r: r.student_id):
+        lst = list(group_iter)
+        debts = [
+            r
+            for r in lst
+            if is_debtor(r.exam, r.retake, r.commission)
+        ]
+        if not debts:
+            continue
+
+        student_name = debts[0].student_name
+        data.append([student_name, "", ""])
+
+        for _sid, _sname, sem_name, subj_name, exam, retake, commission in debts:
+            if str(exam) not in passed:
+                ctrl = "Э"
+            elif str(retake) not in passed:
+                ctrl = "П"
+            else:
+                ctrl = "Км"
+            data.append([subj_name, sem_no(sem_name), ctrl])
+
+        data.append(["", "", ""])
+
+    df = pd.DataFrame(data)
+    buf = io.BytesIO()
+    df.to_excel(buf, index=False, header=False)
+    buf.seek(0)
+
+    filename = f"Должники_группа_{group_name}.xlsx"
+    quoted = quote(filename)
+
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quoted}"
+        },
     )
 
 # ─────────── ИМПОРТ СТУДЕНТОВ ───────────

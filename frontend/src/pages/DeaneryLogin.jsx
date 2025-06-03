@@ -31,24 +31,12 @@ const DeaneryLogin = () => {
     <>
       <button
         onClick={() => navigate("/deanery")}
-        style={{
-          position: "fixed",
-          top: "20px",
-          left: "20px",
-          backgroundColor: "#1a1a1a",
-          color: "#fff",
-          padding: "10px 20px",
-          border: "none",
-          borderRadius: "8px",
-          cursor: "pointer",
-          zIndex: 1000,
-        }}
+        className="sticky top-5 left-5 bg-black text-white py-2 px-4 rounded z-50"
       >
         Назад
       </button>
 
       <div className="p-6 flex flex-col items-center">
-        {/* Заголовок, крупный, как на других страницах */}
         <h1 className="w-full text-center text-3xl font-bold mb-8">
           Вход администратора Академического учёта
         </h1>

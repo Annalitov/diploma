@@ -84,18 +84,7 @@ const DeaneryGroupDetail = () => {
     <>
       <button
         onClick={() => navigate("/deanery/dashboard")}
-        style={{
-          position: "fixed",
-          top: "20px",
-          left: "20px",
-          backgroundColor: "#1a1a1a",
-          color: "#fff",
-          padding: "10px 20px",
-          border: "none",
-          borderRadius: "8px",
-          cursor: "pointer",
-          zIndex: 1000,
-        }}
+        className="sticky top-5 left-5 bg-black text-white py-2 px-4 rounded z-50"
       >
         Назад к списку групп
       </button>
@@ -108,7 +97,6 @@ const DeaneryGroupDetail = () => {
 
     <div className="mb-4">
     <button
-      style={{ marginBottom: "2.5rem" }}
       onClick={() => setRenameOpen(true)}
       className="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-2 rounded mb-4"
     >
@@ -118,6 +106,7 @@ const DeaneryGroupDetail = () => {
 
     <div className="mt-6">
     <button
+      style={{ marginBottom: "1.5rem" }}
       onClick={() => setSemOpen(true)}
       className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded"
     >
@@ -147,24 +136,15 @@ const DeaneryGroupDetail = () => {
         isOpen={isRenameOpen}
         onRequestClose={() => setRenameOpen(false)}
         style={{
+          backgroundColor:"rgba(f,f,f,f)",
           overlay: {
-            backgroundColor: "rgba(0,0,0,0.6)",
-            zIndex: 2000,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            display:"flex", alignItems:"center", justifyContent:"center",
+            zIndex:2000
           },
-          content: {
-            position: "relative",
-            inset: "unset",
-            border: "none",
-            background: "#2e2e2e",
-            color: "#fff",
-            borderRadius: "2rem",
-            maxWidth: "600px",
-            width: "90%",
-            padding: 0,
-          },
+          content:{
+            inset:"unset", border:"none", borderRadius:"1rem",
+            padding:0, background:"#f6f6f6", color:"#2e2e2e", maxWidth:"400px", width:"90%"
+          }
         }}
       >
         <div className="pt-6 text-center mx-auto">
@@ -173,7 +153,7 @@ const DeaneryGroupDetail = () => {
             style={{ marginBottom: "1.5rem" }}
             value={newGroupName}
             onChange={e => setNewGroupName(e.target.value)}
-            className="border p-2 block mx-auto w-1/5 mb-4"
+            className="border p-2 block mx-auto w-1/3 mb-4"
           />
           <div className="flex justify-center gap-2">
             <button
@@ -195,25 +175,16 @@ const DeaneryGroupDetail = () => {
       <Modal
         isOpen={isSemOpen}
         onRequestClose={() => setSemOpen(false)}
-        style={{
+       style={{
+          backgroundColor:"rgba(f,f,f,f)",
           overlay: {
-            backgroundColor: "rgba(0,0,0,0.6)",
-            zIndex: 2000,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            display:"flex", alignItems:"center", justifyContent:"center",
+            zIndex:2000
           },
-          content: {
-            position: "relative",
-            inset: "unset",
-            border: "none",
-            background: "#2e2e2e",
-            color: "#fff",
-            borderRadius: "2rem",
-            maxWidth: "600px",
-            width: "90%",
-            padding: 0,
-          },
+          content:{
+            inset:"unset", border:"none", borderRadius:"1rem",
+            padding:0, background:"#f6f6f6", color:"#2e2e2e", maxWidth:"400px", width:"90%"
+          }
         }}
       >
         <div className="pt-6 text-center mx-auto">
@@ -223,7 +194,7 @@ const DeaneryGroupDetail = () => {
             value={newSemesterName}
             onChange={e => setNewSemesterName(e.target.value)}
             placeholder="Название семестра"
-            className="border p-2 block mx-auto w-1/5 mb-4"
+            className="border p-2 block mx-auto w-1/2 mb-4"
           />
           <div className="flex justify-center gap-2">
             <button

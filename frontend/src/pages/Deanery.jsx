@@ -7,18 +7,7 @@ const Deanery = () => {
     <>
       <button
         onClick={() => navigate("/")}
-        style={{
-          position: "fixed",
-          top: "20px",
-          left: "20px",
-          backgroundColor: "#1a1a1a",
-          color: "#fff",
-          padding: "10px 20px",
-          border: "none",
-          borderRadius: "8px",
-          cursor: "pointer",
-          zIndex: 1000,
-        }}
+        className="sticky top-5 left-5 bg-black text-white py-2 px-4 rounded z-50"
       >
         Назад
       </button>

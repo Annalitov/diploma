@@ -168,18 +168,7 @@ const SemesterDetail = () => {
     <>
     <button
      onClick={() => navigate(`/deanery/groups/${groupId}/`)}
-      style={{
-        position: "fixed",
-        top: "20px",
-        left: "20px",
-        backgroundColor: "#1a1a1a",
-        color: "#fff",
-        padding: "10px 20px",
-        border: "none",
-        borderRadius: "8px",
-        cursor: "pointer",
-        zIndex: 1000,
-      }}
+      className="sticky top-5 left-5 bg-black text-white py-2 px-4 rounded z-50"
     >
       Назад к списку семестров
     </button>
@@ -187,7 +176,6 @@ const SemesterDetail = () => {
         <h1 className="text-3xl font-bold">Группа {currentGroupName}</h1>
         <p className="text-xl text-gray-300">{currentSemName}</p>
       </div>
-      {/* Кнопки сверху по центру */}
       <div className="flex justify-center space-x-4 my-6">
         <button
           onClick={() => setAddOpen(true)}
@@ -215,9 +203,7 @@ const SemesterDetail = () => {
         </button>
       </div>
 
-      {/* Общий контейнер с двумя колонками */}
       <div className="p-6 max-w-4xl mx-auto grid grid-cols-4 gap-8">
-        {/* Левая колонка: студенты */}
         <div className="col-start-2 text-left">
           <h2 className="text-2xl font-semibold mb-4 text-center">Студенты</h2>
           <ol className="list-decimal list-inside space-y-2 max-h-[60vh] overflow-auto">
@@ -261,24 +247,15 @@ const SemesterDetail = () => {
         isOpen={isAddOpen}
         onRequestClose={() => setAddOpen(false)}
         style={{
+          backgroundColor:"rgba(f,f,f,f)",
           overlay: {
-            backgroundColor: "rgba(0, 0, 0, 0.6)",
-            zIndex: 2000,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            display:"flex", alignItems:"center", justifyContent:"center",
+            zIndex:2000
           },
-          content: {
-          position: "relative",
-          inset: "unset",
-          border: "none",
-          background: "#2e2e2e",
-          color: "#fff",
-          borderRadius: "2rem",
-          maxWidth: "600px",
-          width: "90%",
-          padding: 0,
-          },
+          content:{
+            inset:"unset", border:"none", borderRadius:"1rem",
+            padding:0, background:"#f6f6f6", color:"#2e2e2e", maxWidth:"400px", width:"90%"
+          }
         }}
       >
       <div style={{ margin: "0 auto", textAlign: "center" }} className="pt-6">
@@ -308,24 +285,15 @@ const SemesterDetail = () => {
         isOpen={isImportOpen}
         onRequestClose={() => setImportOpen(false)}
         style={{
+          backgroundColor:"rgba(f,f,f,f)",
           overlay: {
-            backgroundColor: "rgba(0, 0, 0, 0.6)",
-            zIndex: 2000,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            display:"flex", alignItems:"center", justifyContent:"center",
+            zIndex:2000
           },
-          content: {
-          position: "relative",
-          inset: "unset",
-          border: "none",
-          background: "#2e2e2e",
-          color: "#fff",
-          borderRadius: "2rem",
-          maxWidth: "600px",
-          width: "90%",
-          padding: 0,
-          },
+          content:{
+            inset:"unset", border:"none", borderRadius:"1rem",
+            padding:0, background:"#f6f6f6", color:"#2e2e2e", maxWidth:"400px", width:"90%"
+          }
         }}
       >
       <div style={{ margin: "0 auto", textAlign: "center" }} className="pt-6">
@@ -368,24 +336,15 @@ const SemesterDetail = () => {
         isOpen={isDeleteOpen}
         onRequestClose={() => setDeleteOpen(false)}
         style={{
+          backgroundColor:"rgba(f,f,f,f)",
           overlay: {
-            backgroundColor: "rgba(0, 0, 0, 0.6)",
-            zIndex: 2000,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            display:"flex", alignItems:"center", justifyContent:"center",
+            zIndex:2000
           },
-          content: {
-            position: "relative",
-            inset: "unset",
-            border: "none",
-            background: "#2e2e2e",
-            color: "#fff",
-            borderRadius: "2rem",
-            maxWidth: "600px",
-            width: "90%",
-            padding: 0,
-          },
+          content:{
+            inset:"unset", border:"none", borderRadius:"1rem",
+            padding:0, background:"#f6f6f6", color:"#2e2e2e", maxWidth:"400px", width:"90%"
+          }
         }}
       >
         <div className="pt-6 text-center mx-auto">
@@ -428,24 +387,15 @@ const SemesterDetail = () => {
         isOpen={isSubjOpen}
         onRequestClose={() => setSubjOpen(false)}
         style={{
+          backgroundColor:"rgba(f,f,f,f)",
           overlay: {
-            backgroundColor: "rgba(0, 0, 0, 0.6)",
-            zIndex: 2000,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            display:"flex", alignItems:"center", justifyContent:"center",
+            zIndex:2000
           },
-          content: {
-          position: "relative",
-          inset: "unset",
-          border: "none",
-          background: "#2e2e2e",
-          color: "#fff",
-          borderRadius: "2rem",
-          maxWidth: "600px",
-          width: "90%",
-          padding: 0,
-          },
+          content:{
+            inset:"unset", border:"none", borderRadius:"1rem",
+            padding:0, background:"#f6f6f6", color:"#2e2e2e", maxWidth:"400px", width:"90%"
+          }
         }}
       >
       <div style={{ margin: "0 auto", textAlign: "center" }} className="pt-6">
@@ -475,24 +425,15 @@ const SemesterDetail = () => {
         isOpen={isCloneOpen}
         onRequestClose={() => setCloneOpen(false)}
         style={{
+          backgroundColor:"rgba(f,f,f,f)",
           overlay: {
-            backgroundColor: "rgba(0, 0, 0, 0.6)",
-            zIndex: 2000,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            display:"flex", alignItems:"center", justifyContent:"center",
+            zIndex:2000
           },
-          content: {
-          position: "relative",
-          inset: "unset",
-          border: "none",
-          background: "#2e2e2e",
-          color: "#fff",
-          borderRadius: "2rem",
-          maxWidth: "600px",
-          width: "90%",
-          padding: 0,
-          },
+          content:{
+            inset:"unset", border:"none", borderRadius:"1rem",
+            padding:0, background:"#f6f6f6", color:"#2e2e2e", maxWidth:"400px", width:"90%"
+          }
         }}
       >
         <div className="bg-white p-6 rounded max-w-sm w-full">

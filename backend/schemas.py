@@ -127,13 +127,18 @@ class UnionMemberUpdate(BaseModel):
 
 
 class PaymentStatusResponse(BaseModel):
-    id: int
-    full_name: str
+    id:         int
+    full_name:  str
     group_name: str
-    paid: str
+    paid:       str
 
 class PaymentPeriodResponse(BaseModel):
     period_name: str
+
+
+class PaymentDetailResponse(BaseModel):
+    period_name: str
+    paid:        str
 
 class PaymentUpdateRequest(BaseModel):
     member_id: int

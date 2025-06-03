@@ -60,18 +60,7 @@ const DeaneryDashboard = () => {
     <>
       <button
         onClick={() => navigate("/deanery")}
-        style={{
-          position: "fixed",
-          top: "20px",
-          left: "20px",
-          backgroundColor: "#1a1a1a",
-          color: "#fff",
-          padding: "10px 20px",
-          border: "none",
-          borderRadius: "8px",
-          cursor: "pointer",
-          zIndex: 1000,
-        }}
+        className="sticky top-5 left-5 bg-black text-white py-2 px-4 rounded z-50"
       >
         Назад к авторизации
       </button>
@@ -115,24 +104,15 @@ const DeaneryDashboard = () => {
         onRequestClose={closeModal}
         contentLabel="Новая учебная группа"
         style={{
+          backgroundColor:"rgba(f,f,f,f)",
           overlay: {
-            backgroundColor: "rgba(0, 0, 0, 0.6)",
-            zIndex: 2000,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            display:"flex", alignItems:"center", justifyContent:"center",
+            zIndex:2000
           },
-          content: {
-            position: "relative",
-            inset: "unset",
-            border: "none",
-            background: "#2e2e2e",
-            color: "#fff",
-            borderRadius: "2rem",
-            maxWidth: "600px",
-            width: "90%",
-            padding: 0,
-          },
+          content:{
+            inset:"unset", border:"none", borderRadius:"1rem",
+            padding:0, background:"#f6f6f6", color:"#2e2e2e", maxWidth:"400px", width:"90%"
+          }
         }}
       >
         <div className="pt-6 text-center mx-auto">
@@ -142,7 +122,7 @@ const DeaneryDashboard = () => {
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             placeholder="Название группы"
-            className="border p-2 block mx-auto w-1/5 mb-6"
+            className="border p-2 block mx-auto w-3/5 mb-6"
           />
           <div className="flex justify-center gap-4 mb-4">
             <button

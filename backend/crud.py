@@ -1,10 +1,13 @@
 import re
+from typing import Optional
+from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text, insert, update, and_, or_, not_, func
 from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload
 from backend.models import UnionMember, PaymentPeriod, UnionPayment
 from backend.schemas import UnionMemberCreate, UnionMemberUpdate
+from backend.database import get_db
 from datetime import datetime
 
 
@@ -114,9 +117,6 @@ async def create_union_member(db: AsyncSession, member):
     return enriched_result.mappings().first()
 
 
-
-
-
 async def update_union_member(db: AsyncSession, member_id: int, update_data: dict):
     query = select(UnionMember).where(UnionMember.id == member_id)
     result = await db.execute(query)
@@ -186,9 +186,6 @@ async def update_union_member(db: AsyncSession, member_id: int, update_data: dic
     return enriched_result.mappings().first()
 
 
-
-
-
 async def next_academic_year(db: AsyncSession):
     excluded_statuses = ["вышел", "академ", "отчислен", "выпущен"]
 
@@ -210,8 +207,6 @@ async def next_academic_year(db: AsyncSession):
 
     await db.commit()
     return {"message": f"Переход завершён. Обработано {updated_count} записей.", "count": updated_count}
-
-
 
 
 async def previous_academic_year(db: AsyncSession):
@@ -252,6 +247,7 @@ async def previous_academic_year(db: AsyncSession):
 async def get_payments_by_period(db: AsyncSession, period_name: str = ""):
     result = await db.execute(
         select(UnionMember)
+        .where(UnionMember.status == 'состоит')
         .options(
             joinedload(UnionMember.group),
             joinedload(UnionMember.payments).joinedload(UnionPayment.period)
@@ -265,27 +261,25 @@ async def get_payments_by_period(db: AsyncSession, period_name: str = ""):
             payment = next(iter(member.payments), None)
         else:
             payment = next(
-                (p for p in member.payments if p.period and period_name in p.period.period_name),
+                (p for p in member.payments
+                     if p.period and period_name in p.period.period_name),
                 None
             )
         paid_status = payment.paid if payment else "-"
 
         raw_name = member.group.name if member.group else ""
-        inst_code = raw_name.split("-", 1)[0]  # "М8О"
+        inst_code = raw_name.split("-", 1)[0]
         suffix = getattr(member, "group_suffix", None)
-
         if suffix is None:
             full_group_name = inst_code
         else:
-            num = member.group_id  # 101
+            num = member.group_id
             suffix_num = int(suffix)
             is_bachelor = num < 500
-
             if suffix_num <= 23:
                 prefix = "Б" if is_bachelor else "М"
             else:
                 prefix = "БВ" if is_bachelor else "СВ"
-
             full_group_name = f"{inst_code}-{num}{prefix}-{suffix}"
 
         data.append({
@@ -296,9 +290,6 @@ async def get_payments_by_period(db: AsyncSession, period_name: str = ""):
         })
 
     return data
-
-
-
 
 
 
@@ -360,3 +351,30 @@ async def create_payment_period(db: AsyncSession, format_id: int, period_name: s
     await db.commit()
 
     return {"message": "Период создан и записи добавлены", "added_for": len(member_ids)}
+
+async def batch_create_members(
+    payload: list[UnionMemberCreate],
+    db: AsyncSession = Depends(get_db)
+):
+    created = 0
+    for item in payload:
+        try:
+            await create_union_member(db, item)
+            created += 1
+        except Exception as e:
+            continue
+    return {"message": f"{created} из {len(payload)} участников добавлено"}
+
+
+async def get_member_payments(
+    db: AsyncSession,
+    member_id: int
+) -> list[dict]:
+   
+    q = await db.execute(
+        select(UnionPayment.paid, PaymentPeriod.period_name)
+        .join(PaymentPeriod, UnionPayment.period_id == PaymentPeriod.id)
+        .where(UnionPayment.member_id == member_id)
+    )
+    rows = q.all()
+    return [{"period_name": pn, "paid": paid} for paid, pn in rows]

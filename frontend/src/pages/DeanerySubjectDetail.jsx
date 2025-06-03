@@ -168,18 +168,7 @@ const DeanerySubjectDetail = () => {
       <>
     <button
       onClick={() => navigate(`/deanery/groups/${groupId}/semesters/${semId}`)}
-      style={{
-        position: "fixed",
-        top: "20px",
-        left: "20px",
-        backgroundColor: "#1a1a1a",
-        color: "#fff",
-        padding: "10px 20px",
-        border: "none",
-        borderRadius: "8px",
-        cursor: "pointer",
-        zIndex: 1000,
-      }}
+      className="sticky top-5 left-5 bg-black text-white py-2 px-4 rounded z-50"
     >
       Назад к списку предметов
     </button>
@@ -206,7 +195,7 @@ const DeanerySubjectDetail = () => {
         </button>
       </div>
 
-      <div className="p-6 overflow-auto">
+      <div className="attendance-table overflow-auto">
       <table className="min-w-full border">
         <thead>
           <tr>
@@ -233,13 +222,13 @@ const DeanerySubjectDetail = () => {
         <tbody>
           {sortedStudents.map(st => (
             <tr key={st.id}>
-              <td className="border px-2 py-1">{st.full_name}</td>
+              <td className="border px-2 py-1 text-center">{st.full_name}</td>
               {lessons.map(ls => (
                 <td key={ls.id} className="border px-2 py-1">
                   <select
                     value={attMap[ls.id]?.[st.id] ?? "н"}
                     onChange={e => handleAttChange(ls.id, st.id, e.target.value)}
-                    className="block w-3/5 mx-auto text-center [text-align-last:center] [-moz-text-align-last:center]"
+                    className="block w-1/3 mx-auto text-center [text-align-last:center] [-moz-text-align-last:center]"
                   >
                     {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
@@ -305,24 +294,15 @@ const DeanerySubjectDetail = () => {
         isOpen={isAddLessonOpen}
         onRequestClose={() => setAddLessonOpen(false)}
         style={{
+          backgroundColor:"rgba(f,f,f,f)",
           overlay: {
-            backgroundColor: "rgba(0, 0, 0, 0.6)",
-            zIndex: 2000,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            display:"flex", alignItems:"center", justifyContent:"center",
+            zIndex:2000
           },
-          content: {
-          position: "relative",
-          inset: "unset",
-          border: "none",
-          background: "#2e2e2e",
-          color: "#fff",
-          borderRadius: "2rem",
-          maxWidth: "600px",
-          width: "90%",
-          padding: 0,
-          },
+          content:{
+            inset:"unset", border:"none", borderRadius:"1rem",
+            padding:0, background:"#f6f6f6", color:"#2e2e2e", maxWidth:"400px", width:"90%"
+          }
         }}
       >
       <div style={{ margin: "0 auto", textAlign: "center" }} className="pt-6">
@@ -345,24 +325,15 @@ const DeanerySubjectDetail = () => {
         isOpen={isDeleteLessonOpen}
         onRequestClose={() => setDeleteLessonOpen(false)}
         style={{
+          backgroundColor:"rgba(f,f,f,f)",
           overlay: {
-            backgroundColor: "rgba(0, 0, 0, 0.6)",
-            zIndex: 2000,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            display:"flex", alignItems:"center", justifyContent:"center",
+            zIndex:2000
           },
-          content: {
-          position: "relative",
-          inset: "unset",
-          border: "none",
-          background: "#2e2e2e",
-          color: "#fff",
-          borderRadius: "2rem",
-          maxWidth: "600px",
-          width: "90%",
-          padding: 0,
-          },
+          content:{
+            inset:"unset", border:"none", borderRadius:"1rem",
+            padding:0, background:"#f6f6f6", color:"#2e2e2e", maxWidth:"400px", width:"90%"
+          }
         }}
       >
       <div style={{ margin: "0 auto", textAlign: "center" }} className="pt-6">

@@ -1,11 +1,12 @@
 import re
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from backend.schemas import UnionMemberCreate, UnionMemberUpdate, UnionMemberResponse, PaymentStatusResponse, PaymentUpdateRequest, PaymentPeriodCreate
+from backend.schemas import UnionMemberCreate, UnionMemberUpdate, UnionMemberResponse, PaymentStatusResponse, PaymentUpdateRequest, PaymentPeriodCreate, PaymentDetailResponse
 from backend.database import get_db
 from backend.crud import create_union_member, update_union_member, next_academic_year, previous_academic_year
-from backend.crud import get_payments_by_period, get_all_payment_periods, update_payment_status, create_payment_period
+from backend.crud import get_payments_by_period, get_all_payment_periods, update_payment_status, create_payment_period, get_member_payments
 from backend.auth import get_current_admin
 from backend.models import Group, Admin, PPOUnit 
 
@@ -120,27 +121,82 @@ async def previous_year(
     return await previous_academic_year(db)
 
 
-@router.get("/payments", response_model=list[PaymentStatusResponse])
-async def payments(period: str, db: AsyncSession = Depends(get_db)):
-    return await get_payments_by_period(db, period)
+@router.post("/members/batch_create", response_model=dict,)
+async def batch_create_members_endpoint(
+    payload: list[UnionMemberCreate],
+    db: AsyncSession = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin),
+):
+    result = await crud_batch_create_members(payload, db)
+    return result
 
 
-@router.get("/payments/periods")
+
+@router.get("/members")
+async def search_members(
+    search: str = Query(..., description="Часть ФИО для поиска"),
+    db: AsyncSession = Depends(get_db)
+):
+    q = await db.execute(
+        select(UnionMember, Group.name.label("group_name"))
+        .join(Group, UnionMember.group_id == Group.id)
+        .where(UnionMember.full_name.ilike(f"%{search}%"))
+    )
+    rows = q.all()
+    return [
+        {
+          "id": member.id,
+          "full_name": member.full_name,
+          "group_name": group_name
+        }
+        for (member, group_name) in rows
+    ]
+
+@router.get(
+    "/payments",
+    response_model=List[PaymentStatusResponse],
+    summary="Распределение оплат по периоду"
+)
+async def read_payments(
+    period: Optional[str] = Query(None, description="Название периода"),
+    db: AsyncSession = Depends(get_db),
+):
+    return await get_payments_by_period(db, period or "")
+
+
+@router.get(
+    "/payments/details",
+    response_model=List[PaymentDetailResponse],
+    summary="Все платежи конкретного студента"
+)
+async def read_member_payments(
+    member_id: int = Query(..., description="ID студента"),
+    db: AsyncSession = Depends(get_db),
+):
+    rows = await get_member_payments(db=db, member_id=member_id)
+    if not rows:
+        raise HTTPException(status_code=404, detail="Платежи для данного студента не найдены")
+    return rows
+
+
+@router.get("/payments/periods", response_model=List[str])
 async def payment_periods(db: AsyncSession = Depends(get_db)):
     periods = await get_all_payment_periods(db)
     return [p.period_name for p in periods]
 
 
 @router.put("/payments/update")
-async def update_payment(data: PaymentUpdateRequest, db: AsyncSession = Depends(get_db)):
-    result = await update_payment_status(db, data.member_id, data.period_name, data.paid)
-    return {"success": True, "new_status": result}
+async def update_payment(
+    data: PaymentUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    new_status = await update_payment_status(db, data.member_id, data.period_name, data.paid)
+    return {"success": True, "new_status": new_status}
 
 
 @router.post("/payments/periods", dependencies=[Depends(get_current_admin)])
 async def add_payment_period(
     data: PaymentPeriodCreate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     return await create_payment_period(db, data.format_id, data.period_name)
-
